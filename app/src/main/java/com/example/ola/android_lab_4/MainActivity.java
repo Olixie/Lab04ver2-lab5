@@ -1,13 +1,21 @@
 package com.example.ola.android_lab_4;
 
+import android.content.DialogInterface;
 import android.content.Intent;
+import android.database.sqlite.SQLiteDatabase;
+import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
+import android.view.View;
+import android.widget.Adapter;
+import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.ListView;
+import android.widget.SimpleCursorAdapter;
+import android.widget.TextView;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -15,21 +23,76 @@ import java.util.Arrays;
 public class MainActivity extends AppCompatActivity {
 
     private ArrayList<String> target;
-    private ArrayAdapter adapter;
+    private SimpleCursorAdapter adapter;
+    private MySQLite db;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        //HALLO KOMENTARZ WPROWADZONO
 
-        String[] values = new String[] {"Pies", "Kot", "Koń", "Gołąb", "Kruk", "Dzik", "Karp", "Osioł", "Chomik", "Mysz", "Jeż", "Karaluch"};
-        this.target = new ArrayList<String>();
-        this.target.addAll(Arrays.asList(values));
-
-        this.adapter = new ArrayAdapter(this, android.R.layout.simple_list_item_1, this.target);
+        this.db = new MySQLite(this);
+        this.adapter = new SimpleCursorAdapter
+                (this,
+                        android.R.layout.simple_list_item_2, db.lista(),
+                        new String[] {"_id", "gatunek"},
+                        new int[] {android.R.id.text1, android.R.id.text2},
+                        SimpleCursorAdapter.IGNORE_ITEM_VIEW_TYPE);
         ListView listView = (ListView) findViewById(R.id.listView);
         listView.setAdapter(this.adapter);
+
+        //listener do najechania na liste
+        listView.setOnItemClickListener(new AdapterView.OnItemClickListener(){
+            @Override
+            public void onItemClick(AdapterView<?> adapter, View view, int pos, long id){
+                //pobranie wartosci zmiennej id zachowanej w R.ID.TEXT1
+                TextView name = (TextView) view.findViewById(android.R.id.text1);
+
+                Animal zwierz = db.pobierz(Integer.parseInt(name.getText().toString()));
+                Intent intencja = new Intent(getApplicationContext(), DodajWpis.class);
+                intencja.putExtra("element", zwierz);
+                startActivityForResult(intencja, 2);
+            }
+        });
+
+
+
+        listView.setOnItemLongClickListener(new AdapterView.OnItemLongClickListener() {
+            @Override
+            public boolean onItemLongClick(AdapterView<?> parent, View view, int position, long id) {
+
+                /*TextView name = (TextView) view.findViewById(android.R.id.text1);
+                db.usun(name.getText().toString());
+                adapter.changeCursor(db.lista());
+                adapter.notifyDataSetChanged();
+                return true;*/
+
+                final TextView name = (TextView) view.findViewById(android.R.id.text1);
+                //Wyswietlenie okna dialogowego aby zaakceptowac usuniecie
+                DialogInterface.OnClickListener dialogClickListener = new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        switch (which){
+                            case DialogInterface.BUTTON_POSITIVE:
+                                //Yes button clicked
+                                db.usun(name.getText().toString());
+                                adapter.changeCursor(db.lista());
+                                adapter.notifyDataSetChanged();
+                                break;
+                            case DialogInterface.BUTTON_NEGATIVE:
+                                //No button clicked
+                                break;
+                        }
+                    }
+                };
+
+                AlertDialog.Builder builder = new AlertDialog.Builder(view.getContext());
+                builder.setMessage("Are you sure?").setPositiveButton("Yes", dialogClickListener)
+                        .setNegativeButton("No", dialogClickListener).show();
+
+                return true;
+            }
+        });
 
     }
 
@@ -45,14 +108,24 @@ public class MainActivity extends AppCompatActivity {
         startActivityForResult(intencja, 1);
     }
 
+
+
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data)
     {
         if(requestCode==1 && resultCode==RESULT_OK)
         {
             Bundle extras = data.getExtras();
-            String nowy = (String)extras.get("wpis");
-            target.add(nowy);
+            //String nowy = (String)extras.get("wpis");
+            Animal nowy = (Animal) extras.getSerializable("nowy");
+            this.db.dodaj(nowy);
+            adapter.changeCursor(db.lista());
+            adapter.notifyDataSetChanged();
+        }else if(requestCode==2 && resultCode==RESULT_OK){
+            Bundle extras = data.getExtras();
+            Animal nowy = (Animal) extras.getSerializable("nowy");
+            this.db.aktualizuj(nowy);
+            adapter.changeCursor(db.lista());
             adapter.notifyDataSetChanged();
         }
     }
